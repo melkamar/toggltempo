@@ -1,5 +1,7 @@
 # toggltempo
 
+[![PyPI version](https://badge.fury.io/py/toggltempo.svg)](https://badge.fury.io/py/toggltempo)
+
 Synchronises time entries from [Toggl Track](https://toggl.com/) or a text file into
 the [Tempo Timesheets](https://marketplace.atlassian.com/apps/6572/timesheets-by-tempo-jira-time-tracking?tab=overview&hosting=cloud)
 Jira plugin.
