@@ -1,0 +1,3 @@
+import toggltempo
+
+toggltempo.main()
