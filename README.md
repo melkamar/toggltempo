@@ -92,6 +92,7 @@ When tracking entries in Toggl Track, it's useful to use the "@" shortcut to add
 the currently tracked entry.
 
 This is a correct entry:
+
 ![correct toggl track entry](docs/correct-toggl-track-entry.png)
 
 #### Import time entries from an exact date
@@ -119,4 +120,13 @@ The file structure is:
 # Comments
 PROJ-123  1h5m Some description that may contain spaces
 MISC-9876 5m First column is the Jira issue ID, second column is the time to log, and everything else will be the description
+```
+
+## Development
+
+```bash
+$ python3 -m pip install twine build
+
+$ python3 -m build
+$ python3 -m twine upload dist/*
 ```
