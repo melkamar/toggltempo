@@ -127,7 +127,7 @@ MISC-9876 5m First column is the Jira issue ID, second column is the time to log
 ### Ignore time entries
 To skip a time entry from being reported to Tempo, mark it with a `#nobill` tag.
 
-![nobill](nobill-toggl-track-entry.png)
+![nobill](docs/nobill-toggl-track-entry.png)
 
 ```bash
 $ toggltempo 2023-11-26
