@@ -124,6 +124,19 @@ PROJ-123  1h5m Some description that may contain spaces
 MISC-9876 5m First column is the Jira issue ID, second column is the time to log, and everything else will be the description
 ```
 
+### Ignore time entries
+To skip a time entry from being reported to Tempo, mark it with a `#nobill` tag.
+
+![nobill](nobill-toggl-track-entry.png)
+
+```bash
+$ toggltempo 2023-11-26
+Reading entries from Toggl API
+  - Skipping import of "do not report this (2:02:29)", because it is tagged with #nobill
+Will log the following entries into date "2023-11-26":
+...
+```
+
 ## Development
 
 ```bash

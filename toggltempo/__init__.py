@@ -99,6 +99,11 @@ class TogglTrackApi:
             duration = time_entry_obj['duration']
             description = time_entry_obj['description']
 
+            if 'tags' in time_entry_obj:
+                if 'nobill' in time_entry_obj['tags']:
+                    print(f'  - Skipping import of "{description} ({seconds_to_human_readable(duration)})", because it is tagged with #nobill')
+                    continue
+
             # Note: project can be null if none assigned
             project_id = time_entry_obj['project_id']
             if not project_id:
