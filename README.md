@@ -86,7 +86,9 @@ When importing time entries from Toggl Track, a certain format is expected:
 1. Each time entry MUST be assigned to a Project.
 2. The Project name MUST be in format "RH-1234 Some freetext whatever".
    The first field of the project name (split by a whitespace) is expected to be the Jira issue ID.
-   The rest of the project name is ignored.
+   The rest of the project name is ignored. For convenience use
+   the [Import](#import-jira-tickets-into-toggl-track-projects) command to create Toggl Track projects
+   from Jira tickets.
 3. Each time entry MUST contain a text description. This description will be used as the Jira Tempo
    worklog description.
 
@@ -104,6 +106,22 @@ To send data for a particular date, pass the date as an argument in format `YYYY
 ```bash
 $ toggltempo 2023-10-10
 ```
+
+### Import Jira tickets into Toggl Track projects
+In order to track time to Jira tickets in Toggl, there needs to be a Toggl Project for each Jira ticket. Use the 
+`toggltempo --import XXX` command to save some work with copying over the Jira ticket summaries. 
+
+```bash
+$ toggltempo -i RH-9313   # [or --import RH-9313]
+Going to create a Toggl Track project named:
+
+  RH-9313 Refactor and remove PACE custom email rendering
+
+Is that OK? (y to confirm): y
+Project created in Toggl Track, you can now use it in time tracking 🛠️
+```
+
+You can of course not use this command and create the projects yourself, as long as they follow the required format.
 
 ### Import time entries from a local file
 

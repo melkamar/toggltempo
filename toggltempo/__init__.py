@@ -1,4 +1,5 @@
-from argparse import ArgumentParser, RawTextHelpFormatter
+from argparse import ArgumentParser, RawTextHelpFormatter, Namespace
+import sys
 from pathlib import Path
 from dataclasses import dataclass
 from typing import *
@@ -9,6 +10,17 @@ import re
 import datetime
 
 CONFIG_FILE_DEFAULT_PATH = '.config/toggltempo.yaml'
+
+DEFAULT_CONFIG_FILE = '''jira_tempo:
+  api_token: ''  # Create a Tempo API token at "https://YOUR-WORKSPACE.atlassian.net/plugins/servlet/ac/io.tempo.jira/tempo-app#!/configuration/api-integration".'
+  atlassian_username: ''  # The Atlassian/Jira username (e-mail) you are using
+  atlassian_api_token: ''  # Create an Atlassian API token at https://id.atlassian.com/manage-profile/security/api-tokens. This is used to fetch Jira tickets with the --import command.
+  jira_baseurl: ''  # the URL of your Jira instance (https://somejira.atlassian.net/)
+  user_id: ''  # Find your Jira user ID by clicking your user avatar in Jira UI and going to Profile. The ID will be in the address bar.
+toggl_track:
+  email: ''  # Enter your e-mail and password to the Toggl Track service
+  password: ''  # This is only needed if submitting data through the Toggl Track API. Leave it empty if submitting file-based data.
+'''
 
 
 def seconds_to_human_readable(seconds: int) -> str:
@@ -44,6 +56,9 @@ class TempoEntry:
 class Config:
     jira_tempo_user_id: str
     jira_tempo_api_token: str
+    atlassian_username: str
+    atlassian_api_token: str
+    jira_baseurl: str
     toggl_email: str
     toggl_password: str
 
@@ -101,7 +116,8 @@ class TogglTrackApi:
 
             if 'tags' in time_entry_obj:
                 if 'nobill' in time_entry_obj['tags']:
-                    print(f'  - Skipping import of "{description} ({seconds_to_human_readable(duration)})", because it is tagged with #nobill')
+                    print(
+                        f'  - Skipping import of "{description} ({seconds_to_human_readable(duration)})", because it is tagged with #nobill')
                     continue
 
             # Note: project can be null if none assigned
@@ -148,6 +164,52 @@ class TogglTrackApi:
                 result[key] = entry
         return list(result.values())
 
+    def create_project(self, project_name: str) -> str:
+        """
+        Create a project in Toggl Track
+        :param project_name: the full name of the project, e.g. "RH-1234 Some ticket thing"
+        :return the project id
+        """
+        workspace_id = self._get_workspace_id_of_latest_time_entry()
+
+        response = requests.post(
+            f'https://api.track.toggl.com/api/v9/workspaces/{workspace_id}/projects',
+            auth=requests.auth.HTTPBasicAuth(self.toggl_email, self.toggl_password),
+            headers={
+                'Content-Type': 'application/json',
+            },
+            json={
+                "active": True,
+                "is_private": False,
+                "name": project_name,
+            }
+        )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            raise Exception(response.content) from e
+        return response.json()['id']
+
+    def _get_workspace_id_of_latest_time_entry(self) -> int:
+        """
+        Get the workspace_id value for the latest time entry. This assumes that the user only belongs to a single workspace.
+        :return: workspace ID
+        """
+        response = requests.get(
+            'https://api.track.toggl.com/api/v9/me/time_entries',
+            auth=requests.auth.HTTPBasicAuth(self.toggl_email, self.toggl_password),
+            headers={
+                'Content-Type': 'application/json',
+            }
+        )
+        response.raise_for_status()
+
+        js = response.json()
+        if not js:
+            raise ValueError('There are zero time entries, cannot determine the workspace ID')
+
+        return js[0]['workspace_id']
+
 
 def read_report_file(report_file: Path) -> List[TempoEntry]:
     date = report_file.name
@@ -174,19 +236,7 @@ def read_report_file(report_file: Path) -> List[TempoEntry]:
 def read_config_file(configfile: Path) -> Config:
     if not configfile.exists():
         with configfile.open('w') as f:
-            yaml.dump(
-                {
-                    'jira_tempo': {
-                        'user_id': '',
-                        'api_token': ''
-                    },
-                    'toggl_track': {
-                        'email': '',
-                        'password': ''
-                    }
-                },
-                f
-            )
+            f.write(DEFAULT_CONFIG_FILE)
         raise ConfigNotInitializedException(configfile.resolve())
 
     with configfile.open() as f:
@@ -195,11 +245,15 @@ def read_config_file(configfile: Path) -> Config:
             return Config(
                 yml['jira_tempo']['user_id'],
                 yml['jira_tempo']['api_token'],
+                yml['jira_tempo']['atlassian_username'],
+                yml['jira_tempo']['atlassian_api_token'],
+                yml['jira_tempo']['jira_baseurl'],
                 yml['toggl_track']['email'],
                 yml['toggl_track']['password'],
             )
-        except KeyError:
-            raise KeyError(f'Could not parse config file "{configfile.resolve()}"')
+        except KeyError as e:
+            print(f'Could not parse config file "{configfile.resolve()}". Missing a key: {e}. Expected format:\n---\n{DEFAULT_CONFIG_FILE}', file=sys.stderr)
+            raise e
 
 
 def send_entries_to_tempo(date: str, entries: List[TempoEntry], config: Config):
@@ -265,34 +319,55 @@ def parse_args():
     p.add_argument('-c', '--config', help=f'Path to a configuration file. Defaults to "~/{CONFIG_FILE_DEFAULT_PATH}"')
     p.add_argument('--file', action='store_true',
                    help='If provided, read input from a file. Default is to read from Toggl Track API.')
+    p.add_argument('-i', '--import', dest='jiraimport', nargs=1,
+                   help='Instead of logging time, import a Jira ticket as a project to Toggl Track. Requires the Jira ticket ID as an argument.')
     return p.parse_args()
 
 
-def main():
-    args = parse_args()
-    date = args.DATE
-    read_from_file = args.file
-
+def _read_config(args: Namespace) -> Config:
     if args.config:
         configfile = Path(args.config)
     else:
         configfile = Path.home().joinpath(CONFIG_FILE_DEFAULT_PATH)
 
     try:
-        config = read_config_file(configfile)
+        return read_config_file(configfile)
     except ConfigNotInitializedException as e:
         print(f'''Config file not found: "{e}" 
-The configuration file has been created now. Fill in the required options there.
-
-For Jira Tempo Timesheets
-  - Find your Jira user ID by clicking your user avatar in Jira UI and going to Profile. The ID will be in the address bar. 
-  - Create an API token at "https://YOUR-WORKSPACE.atlassian.net/plugins/servlet/ac/io.tempo.jira/tempo-app#!/configuration/api-integration".'
-  
-For Toggl Track
-  - Enter your e-mail and password to the Toggl Track service
-  - This is only needed if submitting data through the Toggl Track API. Leave it empty if submitting file-based data.
-''')
+The configuration file has been created now. Fill in the required options there.''')
         exit(1)
+
+
+def _cmd_import_jira_ticket_to_toggl(args: Namespace):
+    jira_id = args.jiraimport[0]
+    config = _read_config(args)
+
+    # Get issue summary
+    response = requests.get(
+        f'https://{config.jira_baseurl}/rest/api/latest/issue/{jira_id}',
+        auth=requests.auth.HTTPBasicAuth(config.atlassian_username, config.atlassian_api_token)
+    )
+    response.raise_for_status()
+
+    js = response.json()
+    summary = js['fields']['summary']
+    api = TogglTrackApi(config.toggl_email, config.toggl_password)
+
+    toggl_project_name = f'{jira_id} {summary}'.strip()
+
+    print(f'Going to create a Toggl Track project named:\n\n  {toggl_project_name}\n')
+    if input('Is that OK? (y to confirm): ') != 'y':
+        print('Aborting, goodbye.')
+        return
+
+    api.create_project(toggl_project_name)
+    print('Project created in Toggl Track, you can now use it in time tracking ✅')
+
+
+def _cmd_track_time(args: Namespace):
+    date = args.DATE
+    read_from_file = args.file
+    config = _read_config(args)
 
     if not date:
         if read_from_file:
@@ -358,6 +433,15 @@ For Toggl Track
 
     send_entries_to_tempo(date, tempo_entries, config)
     print('All sent 🎉')
+
+
+def main():
+    args = parse_args()
+
+    if args.jiraimport:
+        _cmd_import_jira_ticket_to_toggl(args)
+    else:
+        _cmd_track_time(args)
 
 
 if __name__ == '__main__':
