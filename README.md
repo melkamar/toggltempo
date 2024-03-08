@@ -17,6 +17,12 @@ Jira plugin.
 $ pip install toggltempo
 ```
 
+### Upgrading to latest version
+
+```bash
+$ pip install -U toggltempo
+```
+
 ## Usage
 
 ### Configuration
