@@ -8,6 +8,7 @@ import requests.auth
 import yaml
 import re
 import datetime
+import logging
 
 CONFIG_FILE_DEFAULT_PATH = '.config/toggltempo.yaml'
 
@@ -44,12 +45,12 @@ def time_str_to_seconds(time_str: str) -> int:
 @dataclass
 class TempoEntry:
     date: str
-    issue_id: str
+    issue_key: str
     time_logged_seconds: int
     description: str
 
     def __repr__(self):
-        return f'{self.date} | {self.issue_id:10} | {seconds_to_human_readable(self.time_logged_seconds):10} | {self.description}'
+        return f'{self.date} | {self.issue_key:10} | {seconds_to_human_readable(self.time_logged_seconds):10} | {self.description}'
 
 
 @dataclass
@@ -93,8 +94,7 @@ class TogglTrackApi:
             "project_id": 194052205,
             "task_id": null,
             "billable": false,
-            "start": "2023-11-01T15:06:49+00:00",
-            "stop": "2023-11-01T15:44:33Z",
+            "start": "2023-11-01T15:44:33Z",
             "duration": 2264,
             "description": "fennia vcr...",
             "tags": [],
@@ -108,9 +108,11 @@ class TogglTrackApi:
             "pid": 194052205
           }
         """
+        _logger().debug(f'Toggl API response: {response.content}')
 
         result = []
         for time_entry_obj in response.json():
+            _logger().info(f'Toggl API, processing item: {time_entry_obj}')
             duration = time_entry_obj['duration']
             description = time_entry_obj['description']
 
@@ -127,12 +129,12 @@ class TogglTrackApi:
                     f'Toggl Track entry with description "{description}" does not have a project assigned. Aborting tracking. I expect that all entries have a project, from which the Jira ticket can be determined.')
 
             project_name = self._get_project_name_from_id(time_entry_obj['workspace_id'], project_id)
-            issue_id = self._get_issue_id_from_project_name(project_name)
+            issue_key = self._get_issue_key_from_project_name(project_name)
 
             result.append(
                 TempoEntry(
                     date,
-                    issue_id,
+                    issue_key,
                     duration,
                     description
                 )
@@ -151,13 +153,13 @@ class TogglTrackApi:
         response.raise_for_status()
         return response.json()['name']
 
-    def _get_issue_id_from_project_name(self, project_name: str) -> str:
+    def _get_issue_key_from_project_name(self, project_name: str) -> str:
         return project_name.split()[0]
 
     def _merge_identical_entries(self, tempo_entries: List[TempoEntry]) -> List[TempoEntry]:
         result = {}
         for entry in tempo_entries:
-            key = f'{entry.issue_id}@@@{entry.description}'
+            key = f'{entry.issue_key}@@@{entry.description}'
             if key in result:
                 result[key].time_logged_seconds += entry.time_logged_seconds
             else:
@@ -221,11 +223,11 @@ def read_report_file(report_file: Path) -> List[TempoEntry]:
         if line.startswith('#'):
             continue
 
-        issue_id, time, description = line.split(' ', maxsplit=2)
+        issue_key, time, description = line.split(' ', maxsplit=2)
         result.append(
             TempoEntry(
                 date,
-                issue_id,
+                issue_key,
                 time_str_to_seconds(time),
                 description
             )
@@ -258,17 +260,20 @@ def read_config_file(configfile: Path) -> Config:
 
 def send_entries_to_tempo(date: str, entries: List[TempoEntry], config: Config):
     for entry in entries:
+        issue_id = jira_issue_key_to_id(entry.issue_key, config)
+
         data = {
-            "issueKey": entry.issue_id,
+            "issueId": issue_id,
             "timeSpentSeconds": entry.time_logged_seconds,
             "startDate": date,
             "startTime": "09:00:00",
             "description": entry.description,
             "authorAccountId": config.jira_tempo_user_id
         }
+        _logger().debug(data)
 
         response = requests.post(
-            'https://api.tempo.io/core/3/worklogs/',
+            'https://api.tempo.io/4/worklogs',
             json=data,
             headers={
                 'Authorization': f'Bearer {config.jira_tempo_api_token}'
@@ -276,8 +281,18 @@ def send_entries_to_tempo(date: str, entries: List[TempoEntry], config: Config):
         )
         response.raise_for_status()
 
-        print(f'  {entry.issue_id} ✅')
+        print(f'  {entry.issue_key} ✅')
 
+def jira_issue_key_to_id(issue_key: str, config: Config) -> int:
+    response = requests.get(
+        f'https://{config.jira_baseurl}/rest/api/latest/issue/{issue_key}',
+        auth=requests.auth.HTTPBasicAuth(config.atlassian_username, config.atlassian_api_token)
+    )
+    response.raise_for_status()
+
+    js = response.json()
+    _logger().debug(js)
+    return js['id']
 
 def assert_date_format_yyyy_mm_dd(date: str):
     if not re.match(r'\d\d\d\d-\d\d-\d\d', date):
@@ -321,6 +336,8 @@ def parse_args():
                    help='If provided, read input from a file. Default is to read from Toggl Track API.')
     p.add_argument('-i', '--import', dest='jiraimport', nargs=1,
                    help='Instead of logging time, import a Jira ticket as a project to Toggl Track. Requires the Jira ticket ID as an argument.')
+    p.add_argument('-v', '--verbose', action='count', default=0)
+
     return p.parse_args()
 
 
@@ -355,13 +372,8 @@ def _cmd_import_jira_ticket_to_toggl(args: Namespace):
 
     toggl_project_name = f'{jira_id} {summary}'.strip()
 
-    print(f'Going to create a Toggl Track project named:\n\n  {toggl_project_name}\n')
-    if input('Is that OK? (y to confirm): ') != 'y':
-        print('Aborting, goodbye.')
-        return
-
     api.create_project(toggl_project_name)
-    print('Project created in Toggl Track, you can now use it in time tracking ✅')
+    print(f'Project created in Toggl Track:\n\n  {toggl_project_name}\n\nYou can now use it in time tracking ✅')
 
 
 def _cmd_track_time(args: Namespace):
@@ -412,7 +424,7 @@ def _cmd_track_time(args: Namespace):
     for entry in tempo_entries:
         entry_line = f'  - {entry}'
         if entry.description.strip() == '':
-            errors.append(f'Entry for {entry.issue_id} is missing a description')
+            errors.append(f'Entry for {entry.issue_key} is missing a description')
             entry_line += ' ⚠️'
         print(entry_line)
     print('')
@@ -435,8 +447,25 @@ def _cmd_track_time(args: Namespace):
     print('All sent 🎉')
 
 
+def _logger():
+    return logging.getLogger()
+
+
 def main():
     args = parse_args()
+
+    if args.verbose == 0:
+        level = logging.CRITICAL
+    elif args.verbose == 1:
+        level = logging.WARNING
+    elif args.verbose == 2:
+        level = logging.INFO
+    else:
+        level = logging.DEBUG
+
+    logging.basicConfig(
+        level=level
+    )
 
     if args.jiraimport:
         _cmd_import_jira_ticket_to_toggl(args)
