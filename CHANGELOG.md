@@ -1,4 +1,4 @@
-# 2.1.0
+# 2.1.1
 
 - Switch to using Tempo API v4. v3 is deprecated and will return HTTP 410 gone when trying to use it.
 
