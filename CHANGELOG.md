@@ -1,3 +1,7 @@
+# 2.1.0
+
+- Switch to using Tempo API v4. v3 is deprecated and will return HTTP 410 gone when trying to use it.
+
 # 2.0.0
 
 - Add the `--import JRA-1234` option to import a Jira ticket as a Toggl Tempo project. Note that this is backwards
