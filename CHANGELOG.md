@@ -1,3 +1,7 @@
+# 2.1.2
+
+- Fetch worklogs from Toggl Tempo using a tz-aware datetimes. The timezone is determined from the system locale.
+
 # 2.1.1
 
 - Switch to using Tempo API v4. v3 is deprecated and will return HTTP 410 gone when trying to use it.

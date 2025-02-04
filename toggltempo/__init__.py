@@ -8,6 +8,7 @@ import requests.auth
 import yaml
 import re
 import datetime
+from zoneinfo import ZoneInfo
 import logging
 
 CONFIG_FILE_DEFAULT_PATH = '.config/toggltempo.yaml'
@@ -74,11 +75,17 @@ class TogglTrackApi:
         self.toggl_password = toggl_password
 
     def get_entries_for_date(self, date: str) -> List[TempoEntry]:
+        tzname = datetime.datetime.now(datetime.timezone.utc).astimezone().tzname()
+        start_date = datetime.datetime.strptime(f'{date} 00:00', '%Y-%m-%d %H:%M').replace(tzinfo=ZoneInfo(tzname))
+        end_date = datetime.datetime.strptime(f'{date} 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=ZoneInfo(tzname))
+
+        print(f'Fetching time entries between dates (using local tz): {start_date.isoformat()} - {end_date.isoformat()}')
+
         response = requests.get(
             'https://api.track.toggl.com/api/v9/me/time_entries',
             {
-                'start_date': date,
-                'end_date': f'{date}T23:59:59Z'
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
             },
             auth=requests.auth.HTTPBasicAuth(self.toggl_email, self.toggl_password),
             headers={

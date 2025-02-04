@@ -1,0 +1,6 @@
+.idea
+dist
+.DS_Store
+__pycache__
+toggltempo.egg-info
+
