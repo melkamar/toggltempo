@@ -9,6 +9,7 @@ import yaml
 import re
 import datetime
 from zoneinfo import ZoneInfo
+from tzlocal import get_localzone
 import logging
 
 CONFIG_FILE_DEFAULT_PATH = '.config/toggltempo.yaml'
@@ -75,9 +76,9 @@ class TogglTrackApi:
         self.toggl_password = toggl_password
 
     def get_entries_for_date(self, date: str) -> List[TempoEntry]:
-        tzname = datetime.datetime.now(datetime.timezone.utc).astimezone().tzname()
-        start_date = datetime.datetime.strptime(f'{date} 00:00', '%Y-%m-%d %H:%M').replace(tzinfo=ZoneInfo(tzname))
-        end_date = datetime.datetime.strptime(f'{date} 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=ZoneInfo(tzname))
+        local_tz = get_localzone()
+        start_date = datetime.datetime.strptime(f'{date} 00:00', '%Y-%m-%d %H:%M').replace(tzinfo=local_tz)
+        end_date = datetime.datetime.strptime(f'{date} 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=local_tz)
 
         print(f'Fetching time entries between dates (using local tz): {start_date.isoformat()} - {end_date.isoformat()}')
 

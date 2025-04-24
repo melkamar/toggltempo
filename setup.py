@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='toggltempo',
-    version='2.1.2',
+    version='2.1.3',
     url='https://github.com/melkamar/toggltempo',
     author='Martin Melka',
     author_email='martin.melka@gmail.com',
@@ -10,7 +10,8 @@ setup(
     packages=find_packages(),
     install_requires=[
         'requests',
-        'pyyaml'
+        'pyyaml',
+        'tzlocal'
     ],
     entry_points={
         'console_scripts': [
