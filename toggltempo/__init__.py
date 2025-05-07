@@ -380,8 +380,8 @@ def _cmd_import_jira_ticket_to_toggl(args: Namespace):
 
     toggl_project_name = f'{jira_id} {summary}'.strip()
 
-    api.create_project(toggl_project_name)
-    print(f'Project created in Toggl Track:\n\n  {toggl_project_name}\n\nYou can now use it in time tracking ✅')
+    project_id = api.create_project(toggl_project_name)
+    print(f'Project created in Toggl Track:\n\n  {toggl_project_name}\n\n  Project ID: {project_id}\n\nYou can now use it in time tracking ✅')
 
 
 def _cmd_track_time(args: Namespace):
