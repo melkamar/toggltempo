@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.4
+- Update outdated dependencies to latest stable versions for security and compatibility improvements
+
 ## 2.1.3
 - Fix CEST/CET timezone issue. The timezone is now determined using the `tzlocal` lib.
 

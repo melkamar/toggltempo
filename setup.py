@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='toggltempo',
-    version='2.1.3',
+    version='2.1.4',
     url='https://github.com/melkamar/toggltempo',
     author='Martin Melka',
     author_email='martin.melka@gmail.com',
